@@ -221,7 +221,9 @@
         function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    drawGame(); // Redraw the game when resizing
+    if (dungeon && dungeon.tiles) {
+        drawGame(); // Only redraw if the dungeon exists
+    }
 }
 
 // Add event listener for window resize
@@ -262,6 +264,11 @@ resizeCanvas();
         }
 
         function drawGame() {
+    if (!dungeon || !dungeon.tiles || !player) {
+        console.log("Game state not initialized yet");
+        return; // Exit the function if the game state isn't ready
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Calculate viewport boundaries
@@ -273,9 +280,11 @@ resizeCanvas();
     // Draw tiles
     for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
-            const screenX = (x - startX) * TILE_SIZE;
-            const screenY = (y - startY) * TILE_SIZE;
-            drawTile(dungeon.tiles[y][x], screenX, screenY);
+            if (dungeon.tiles[y] && dungeon.tiles[y][x] !== undefined) {
+                const screenX = (x - startX) * TILE_SIZE;
+                const screenY = (y - startY) * TILE_SIZE;
+                drawTile(dungeon.tiles[y][x], screenX, screenY);
+            }
         }
     }
 
@@ -357,138 +366,176 @@ resizeCanvas();
             if (playerMenu.style.display === 'block') updatePlayerMenu();
         }
 
-        function generateDungeon() {
-            dungeon.tiles = [];
-            dungeon.rooms = [];
-            dungeon.monsters = [];
-            dungeon.items = [];
+        function initializeGameState() {
+    dungeon = {
+        level: 1,
+        width: 50,
+        height: 50,
+        tiles: [],
+        rooms: [],
+        monsters: [],
+        items: []
+    };
+    
+    player = {
+        x: 0,
+        y: 0,
+        race: '',
+        stats: {
+            strength: 5,
+            dexterity: 5,
+            mana: 5,
+            luck: 5,
+            hp: 10,
+            maxHp: 10,
+            xp: 0,
+            level: 1
+        },
+        inventory: [],
+        equippedItems: {
+            weapon: null,
+            armor: null
+        },
+        coins: 0,
+        skills: []
+    };
+}
 
-            // Initialize tiles with walls
-            for (let y = 0; y < dungeon.height; y++) {
-                dungeon.tiles[y] = new Array(dungeon.width).fill(tileTypes.WALL);
-            }
+function generateDungeon() {
+    dungeon.tiles = [];
+    dungeon.rooms = [];
+    dungeon.monsters = [];
+    dungeon.items = [];
 
-            // Generate rooms
-            const numRooms = 5 + Math.floor(Math.random() * 5);
-            for (let i = 0; i < numRooms; i++) {
-                const room = generateRoom();
-                if (placeRoom(room)) {
-                    dungeon.rooms.push(room);
-                }
-            }
+    // Initialize tiles with walls
+    for (let y = 0; y < dungeon.height; y++) {
+        dungeon.tiles[y] = new Array(dungeon.width).fill(tileTypes.WALL);
+    }
 
-            // Connect rooms
-            for (let i = 1; i < dungeon.rooms.length; i++) {
-                connectRooms(dungeon.rooms[i-1], dungeon.rooms[i]);
-            }
-
-            // Place stairs in a random room (not the first one)
-            const stairsRoom = dungeon.rooms[1 + Math.floor(Math.random() * (dungeon.rooms.length - 1))];
-            const stairsX = stairsRoom.x + Math.floor(Math.random() * stairsRoom.width);
-            const stairsY = stairsRoom.y + Math.floor(Math.random() * stairsRoom.height);
-            dungeon.tiles[stairsY][stairsX] = tileTypes.STAIRS;
-
-            // Place shop in a random room
-            const shopRoom = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
-            const shopX = shopRoom.x + Math.floor(Math.random() * shopRoom.width);
-            const shopY = shopRoom.y + Math.floor(Math.random() * shopRoom.height);
-            dungeon.tiles[shopY][shopX] = tileTypes.SHOP;
-
-            // Generate monsters and items
-            generateMonstersAndItems();
-
-            // Place player in the first room
-            const startRoom = dungeon.rooms[0];
-            player.x = startRoom.x + Math.floor(startRoom.width / 2);
-            player.y = startRoom.y + Math.floor(startRoom.height / 2);
+    // Generate rooms
+    const numRooms = 5 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < numRooms; i++) {
+        const room = generateRoom();
+        if (placeRoom(room)) {
+            dungeon.rooms.push(room);
         }
+    }
 
-        function generateRoom() {
-            const minSize = 3;
-            const maxSize = 8;
-            return {
-                x: 0,
-                y: 0,
-                width: minSize + Math.floor(Math.random() * (maxSize - minSize + 1)),
-                height: minSize + Math.floor(Math.random() * (maxSize - minSize + 1))
-            };
-        }
+    // Connect rooms
+    for (let i = 1; i < dungeon.rooms.length; i++) {
+        connectRooms(dungeon.rooms[i-1], dungeon.rooms[i]);
+    }
 
-        function placeRoom(room) {
-            const padding = 1;
-            let attempts = 50;
-            while (attempts > 0) {
-                room.x = padding + Math.floor(Math.random() * (dungeon.width - room.width - padding * 2));
-                room.y = padding + Math.floor(Math.random() * (dungeon.height - room.height - padding * 2));
+    // Place stairs in a random room (not the first one)
+    const stairsRoom = dungeon.rooms[1 + Math.floor(Math.random() * (dungeon.rooms.length - 1))];
+    const stairsX = stairsRoom.x + Math.floor(Math.random() * stairsRoom.width);
+    const stairsY = stairsRoom.y + Math.floor(Math.random() * stairsRoom.height);
+    dungeon.tiles[stairsY][stairsX] = tileTypes.STAIRS;
 
-                if (isRoomValid(room)) {
-                    for (let y = room.y; y < room.y + room.height; y++) {
-                        for (let x = room.x; x < room.x + room.width; x++) {
-                            dungeon.tiles[y][x] = tileTypes.FLOOR;
-                        }
-                    }
-                    return true;
-                }
-                attempts--;
-            }
-            return false;
-        }
+    // Place shop in a random room
+    const shopRoom = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+    const shopX = shopRoom.x + Math.floor(Math.random() * shopRoom.width);
+    const shopY = shopRoom.y + Math.floor(Math.random() * shopRoom.height);
+    dungeon.tiles[shopY][shopX] = tileTypes.SHOP;
 
-        function isRoomValid(room) {
-            const padding = 1;
-            for (let y = room.y - padding; y < room.y + room.height + padding; y++) {
-                for (let x = room.x - padding; x < room.x + room.width + padding; x++) {
-                    if (y < 0 || y >= dungeon.height || x < 0 || x >= dungeon.width || dungeon.tiles[y][x] === tileTypes.FLOOR) {
-                        return false;
-                    }
+    // Generate monsters and items
+    generateMonstersAndItems();
+
+    // Place player in the first room
+    const startRoom = dungeon.rooms[0];
+    player.x = startRoom.x + Math.floor(startRoom.width / 2);
+    player.y = startRoom.y + Math.floor(startRoom.height / 2);
+}
+
+function generateRoom() {
+    const minSize = 3;
+    const maxSize = 8;
+    return {
+        x: 0,
+        y: 0,
+        width: minSize + Math.floor(Math.random() * (maxSize - minSize + 1)),
+        height: minSize + Math.floor(Math.random() * (maxSize - minSize + 1))
+    };
+}
+
+function placeRoom(room) {
+    const padding = 1;
+    let attempts = 50;
+    while (attempts > 0) {
+        room.x = padding + Math.floor(Math.random() * (dungeon.width - room.width - padding * 2));
+        room.y = padding + Math.floor(Math.random() * (dungeon.height - room.height - padding * 2));
+
+        if (isRoomValid(room)) {
+            for (let y = room.y; y < room.y + room.height; y++) {
+                for (let x = room.x; x < room.x + room.width; x++) {
+                    dungeon.tiles[y][x] = tileTypes.FLOOR;
                 }
             }
             return true;
         }
+        attempts--;
+    }
+    return false;
+}
 
-        function connectRooms(roomA, roomB) {
-            let x = roomA.x + Math.floor(roomA.width / 2);
-            let y = roomA.y + Math.floor(roomA.height / 2);
-            const targetX = roomB.x + Math.floor(roomB.width / 2);
-            const targetY = roomB.y + Math.floor(roomB.height / 2);
-
-            while (x !== targetX || y !== targetY) {
-                if (x !== targetX) {
-                    x += x < targetX ? 1 : -1;
-                } else if (y !== targetY) {
-                    y += y < targetY ? 1 : -1;
-                }
-                dungeon.tiles[y][x] = tileTypes.FLOOR;
+function isRoomValid(room) {
+    const padding = 1;
+    for (let y = room.y - padding; y < room.y + room.height + padding; y++) {
+        for (let x = room.x - padding; x < room.x + room.width + padding; x++) {
+            if (y < 0 || y >= dungeon.height || x < 0 || x >= dungeon.width || dungeon.tiles[y][x] === tileTypes.FLOOR) {
+                return false;
             }
         }
+    }
+    return true;
+}
 
-        function generateMonstersAndItems() {
-            const numMonsters = dungeon.level + 2;
-            const numItems = 3 + Math.floor(Math.random() * 3);
+function connectRooms(roomA, roomB) {
+    let x = roomA.x + Math.floor(roomA.width / 2);
+    let y = roomA.y + Math.floor(roomA.height / 2);
+    const targetX = roomB.x + Math.floor(roomB.width / 2);
+    const targetY = roomB.y + Math.floor(roomB.height / 2);
 
-            for (let i = 0; i < numMonsters; i++) {
-                const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
-                const monster = {
-                    x: room.x + Math.floor(Math.random() * room.width),
-                    y: room.y + Math.floor(Math.random() * room.height),
-                    ...JSON.parse(JSON.stringify(monsterTypes[Math.floor(Math.random() * monsterTypes.length)]))
-                };
-                dungeon.monsters.push(monster);
-            }
-
-            for (let i = 0; i < numItems; i++) {
-                const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
-                const item = {
-                    x: room.x + Math.floor(Math.random() * room.width),
-                    y: room.y + Math.floor(Math.random() * room.height),
-                    ...JSON.parse(JSON.stringify(itemTypes[Math.floor(Math.random() * itemTypes.length)]))
-                };
-                if (item.name === 'Coins') {
-                    item.value = dungeon.level + Math.floor(Math.random() * 10);
-                }
-                dungeon.items.push(item);
-            }
+    while (x !== targetX || y !== targetY) {
+        if (x !== targetX) {
+            x += x < targetX ? 1 : -1;
+        } else if (y !== targetY) {
+            y += y < targetY ? 1 : -1;
         }
+        dungeon.tiles[y][x] = tileTypes.FLOOR;
+    }
+}
+
+function generateMonstersAndItems() {
+    const numMonsters = dungeon.level + 2;
+    const numItems = 3 + Math.floor(Math.random() * 3);
+
+    for (let i = 0; i < numMonsters; i++) {
+        const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        const monster = {
+            x: room.x + Math.floor(Math.random() * room.width),
+            y: room.y + Math.floor(Math.random() * room.height),
+            ...JSON.parse(JSON.stringify(monsterTypes[Math.floor(Math.random() * monsterTypes.length)]))
+        };
+        monster.hp += Math.floor(dungeon.level / 2);
+        monster.strength += Math.floor(dungeon.level / 3);
+        monster.xp += dungeon.level * 2;
+        dungeon.monsters.push(monster);
+    }
+
+    for (let i = 0; i < numItems; i++) {
+        const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        const item = {
+            x: room.x + Math.floor(Math.random() * room.width),
+            y: room.y + Math.floor(Math.random() * room.height),
+            ...JSON.parse(JSON.stringify(itemTypes[Math.floor(Math.random() * itemTypes.length)]))
+        };
+        if (item.name === 'Coins') {
+            item.value = dungeon.level + Math.floor(Math.random() * 10);
+        }
+        dungeon.items.push(item);
+    }
+}
 
         function checkForEncounters() {
             // Check for stairs
@@ -644,27 +691,40 @@ resizeCanvas();
     document.getElementById('meta-progression-menu').style.display = 'none';
     document.getElementById('game-container').style.display = 'block';
     
-    // Reset player stats
-    player.x = 0;
-    player.y = 0;
-    player.stats = {
-        strength: 5,
-        dexterity: 5,
-        mana: 5,
-        luck: 5,
-        hp: 10,
-        maxHp: 10,
-        xp: 0,
-        level: 1
+    // Initialize dungeon
+    dungeon = {
+        level: 1,
+        width: 50,
+        height: 50,
+        tiles: [],
+        rooms: [],
+        monsters: [],
+        items: []
     };
-    player.inventory = [];
-    player.equippedItems = {
-        weapon: null,
-        armor: null
-    };
-    player.coins = 0;
     
-    dungeon.level = 1;
+    // Reset player stats
+    player = {
+        x: 0,
+        y: 0,
+        race: player.race, // Preserve the chosen race
+        stats: {
+            strength: 5,
+            dexterity: 5,
+            mana: 5,
+            luck: 5,
+            hp: 10,
+            maxHp: 10,
+            xp: 0,
+            level: 1
+        },
+        inventory: [],
+        equippedItems: {
+            weapon: null,
+            armor: null
+        },
+        coins: 0,
+        skills: []
+    };
     
     applyPermanentUpgrades();
     applyRacialBonuses();
@@ -833,8 +893,9 @@ resizeCanvas();
 
         // Initialize the game
         function initGame() {
-            showMetaProgressionMenu();
-        }
+    initializeGameState();
+    showMetaProgressionMenu();
+}
 
         // Start the game
         initGame();
