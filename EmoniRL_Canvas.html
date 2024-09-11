@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Emoji Roguelite Adventure</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #game-canvas {
+            flex-grow: 1;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .menu {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 30;
+            max-width: 80%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .menu-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #virtual-controller {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 150px;
+            height: 150px;
+        }
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+        }
+        #up-btn { grid-column: 2; grid-row: 1; }
+        #left-btn { grid-column: 1; grid-row: 2; }
+        #right-btn { grid-column: 3; grid-row: 2; }
+        #down-btn { grid-column: 2; grid-row: 3; }
+        #menu-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="hud"></div>
+        <div id="virtual-controller">
+            <button class="control-btn" id="up-btn">⬆️</button>
+            <button class="control-btn" id="left-btn">⬅️</button>
+            <button class="control-btn" id="down-btn">⬇️</button>
+            <button class="control-btn" id="right-btn">➡️</button>
+        </div>
+        <button id="menu-btn">📖</button>
+    </div>
+    <div id="start-menu" class="menu">
+        <h1>Emoji Roguelite Adventure</h1>
+        <h2>Choose your race:</h2>
+        <div id="race-selection">
+            <button class="menu-btn race-btn" data-race="human">Human 👨</button>
+            <button class="menu-btn race-btn" data-race="elf">Elf 🧝</button>
+            <button class="menu-btn race-btn" data-race="dwarf">Dwarf 🧔</button>
+            <button class="menu-btn race-btn" data-race="halfling">Halfling 🧒</button>
+        </div>
+        <p id="race-description"></p>
+        <button id="ready-btn" class="menu-btn" style="display: none;">Ready</button>
+    </div>
+    <div id="meta-progression-menu" class="menu">
+        <h2>Your Legacy</h2>
+        <p>Total Runs: <span id="total-runs"></span></p>
+        <p>Highest Level: <span id="highest-level"></span></p>
+        <p>Total Coins: <span id="total-coins"></span></p>
+        <h3>Permanent Upgrades</h3>
+        <button id="upgrade-strength" class="menu-btn">Upgrade Strength (10 coins)</button>
+        <button id="upgrade-dexterity" class="menu-btn">Upgrade Dexterity (10 coins)</button>
+        <button id="upgrade-luck" class="menu-btn">Upgrade Luck (10 coins)</button>
+        <button id="start-new-run" class="menu-btn">Start New Run</button>
+    </div>
+    <div id="player-menu" class="menu">
+        <h2>Player Stats</h2>
+        <div id="player-stats"></div>
+        <h3>Inventory</h3>
+        <div id="inventory"></div>
+        <button id="close-menu" class="menu-btn">Close</button>
+    </div>
+    <script>
+        // Game constants
+        const TILE_SIZE = 32;
+        const VIEWPORT_WIDTH = 15;
+        const VIEWPORT_HEIGHT = 10;
+        const VISIBLE_RADIUS = 5;
+
+        // Game state
+        const player = {
+            x: 0,
+            y: 0,
+            race: '',
+            emoji: '😊',
+            stats: {
+                strength: 5,
+                dexterity: 5,
+                mana: 5,
+                luck: 5,
+                hp: 10,
+                maxHp: 10,
+                xp: 0,
+                level: 1
+            },
+            inventory: [],
+            equippedItems: {
+                weapon: null,
+                armor: null
+            },
+            coins: 0,
+            skills: []
+        };
+
+        const dungeon = {
+            level: 1,
+            width: 50,
+            height: 50,
+            tiles: [],
+            rooms: [],
+            monsters: [],
+            items: []
+        };
+
+        const tileTypes = {
+            FLOOR: 0,
+            WALL: 1,
+            DOOR: 2,
+            STAIRS: 3,
+            SHOP: 4
+        };
+
+        const monsterTypes = [
+            { name: 'Rat', emoji: '🐀', hp: 5, strength: 2, xp: 5 },
+            { name: 'Slime', emoji: '🟢', hp: 7, strength: 3, xp: 7 },
+            { name: 'Giant Bug', emoji: '🪲', hp: 8, strength: 4, xp: 8 },
+            { name: 'Goblin', emoji: '👺', hp: 10, strength: 5, xp: 10 },
+            { name: 'Skeleton', emoji: '💀', hp: 12, strength: 6, xp: 12 },
+            { name: 'Ghost', emoji: '👻', hp: 15, strength: 7, xp: 15 }
+        ];
+
+        const itemTypes = [
+            { name: 'Long Sword', emoji: '🗡️', strength: 10 },
+            { name: 'Short Sword', emoji: '🗡️', strength: 8 },
+            { name: 'Bow', emoji: '🏹', strength: 4, dexterity: 2 },
+            { name: 'Leather Armor', emoji: '🧥', hp: 5 },
+            { name: 'Mace', emoji: '🏏', strength: 8 },
+            { name: 'Dagger', emoji: '🔪', dexterity: 1, luck: 2 },
+            { name: 'Healing Potion', emoji: '🧪', hp: 5, consumable: true },
+            { name: 'Strength Potion', emoji: '💪', strength: 2, duration: 5, consumable: true },
+            { name: 'Dexterity Potion', emoji: '🏃', dexterity: 2, duration: 5, consumable: true },
+            { name: 'Luck Potion', emoji: '🍀', luck: 2, duration: 5, consumable: true },
+            { name: 'Coins', emoji: '🪙', value: 0 }
+        ];
+
+        const skillTypes = [
+            { name: 'Fireball', emoji: '🔥', manaCost: 3, damage: 15 },
+            { name: 'Heal', emoji: '💚', manaCost: 2, healing: 10 },
+            { name: 'Shield', emoji: '🛡️', manaCost: 2, defense: 5, duration: 3 }
+        ];
+
+        // Canvas setup
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            drawGame();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Main game loop
+        function gameLoop() {
+            update();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            // Update game state, monster movements, etc.
+            dungeon.monsters.forEach(monster => {
+                if (Math.abs(monster.x - player.x) <= 1 && Math.abs(monster.y - player.y) <= 1) {
+                    const dx = Math.sign(player.x - monster.x);
+                    const dy = Math.sign(player.y - monster.y);
+                    if (dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL) {
+                        monster.x += dx;
+                        monster.y += dy;
+                    }
+                } else {
+                    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    const validDirections = directions.filter(([dx, dy]) => 
+                        dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL
+                    );
+                    if (validDirections.length > 0) {
+                        const [dx, dy] = validDirections[Math.floor(Math.random() * validDirections.length)];
+                        monster.x += dx;
+                        monster.y += dy;
+                    }
+                }
+            });
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate viewport boundaries
+            const startX = Math.max(0, player.x - Math.floor(VIEWPORT_WIDTH / 2));
+            const startY = Math.max(0, player.y - Math.floor(VIEWPORT_HEIGHT / 2));
+            const endX = Math.min(dungeon.width, startX + VIEWPORT_WIDTH);
+            const endY = Math.min(dungeon.height, startY + VIEWPORT_HEIGHT);
+
+            // Draw tiles
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    const screenX = (x - startX) * TILE_SIZE;
+                    const screenY = (y - startY) * TILE_SIZE;
+                    drawTile(dungeon.tiles[y][x], screenX, screenY);
+                }
+            }
+
+            // Draw entities (monsters, items)
+            dungeon.monsters.forEach(monster => {
+                if (monster.x >= startX && monster.x < endX && monster.y >= startY && monster.y < endY) {
+                    drawEntity(monster, (monster.x - startX) * TILE_SIZE, (monster.y - startY) * TILE_SIZE);
+                }
+            });
+
+            dungeon.items.forEach(item => {
+                if (item.x >= startX && item.x < endX && item.y >= startY && item.y < endY) {
+                    drawEntity(item, (item.x - startX) * TILE_SIZE, (item.y - startY) * TILE_SIZE);
+                }
+            });
+
+            // Draw player
+            drawEntity(player, (player.x - startX) * TILE_SIZE, (player.y - startY) * TILE_SIZE);
+        }
+
+        function drawTile(tileType, x, y) {
+            switch (tileType) {
+                case tileTypes.FLOOR:
+                    ctx.fillStyle = '#CCC';
+                    break;
+                case tileTypes.WALL:
+                    ctx.fillStyle = '#666';
+                    break;
+                case tileTypes.DOOR:
+                    ctx.fillStyle = '#8B4513';
+                    break;
+                case tileTypes.STAIRS:
+                    ctx.fillStyle = '#FFD700';
+                    break;
+                case tileTypes.SHOP:
+                    ctx.fillStyle = '#4169E1';
+                    break;
+            }
+            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+
+        function drawEntity(entity, x, y) {
+            ctx.font = `${TILE_SIZE}px Arial`;
+            ctx.fillText(entity.emoji, x, y + TILE_SIZE);
+        }
+
+        // Input handling
+        function movePlayer(dx, dy) {
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+            if (newX >= 0 && newX < dungeon.width && newY >= 0 && newY < dungeon.height && 
+                dungeon.tiles[newY][newX] !== tileTypes.WALL) {
+                player.x = newX;
+                player.y = newY;
+                checkForEncounters();
+            }
+        }
+
+        document.getElementById('up-btn').addEventListener('click', () => movePlayer(0, -1));
+        document.getElementById('down-btn').addEventListener('click', () => movePlayer(0, 1));
+        document.getElementById('left-btn').addEventListener('click', () => movePlayer(-1, 0));
+        document.getElementById('right-btn').addEventListener('click', () => movePlayer(1, 0));
+
+        document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowUp': movePlayer(0, -1); break;
+                case 'ArrowDown': movePlayer(0, 1); break;
+                case 'ArrowLeft': movePlayer(-1, 0); break;
+                case 'ArrowRight': movePlayer(1, 0); break;
+                case 'i': togglePlayerMenu(); break;
+            }
+        });
+
+ // end part 1
+ function togglePlayerMenu() {
+            const playerMenu = document.getElementById('player-menu');
+            playerMenu.style.display = playerMenu.style.display === 'none' ? 'block' : 'none';
+            if (playerMenu.style.display === 'block') updatePlayerMenu();
+        }
+
+        function generateDungeon() {
+            dungeon.tiles = [];
+            dungeon.rooms = [];
+            dungeon.monsters = [];
+            dungeon.items = [];
+
+            // Initialize tiles with walls
+            for (let y = 0; y < dungeon.height; y++) {
+                dungeon.tiles[y] = new Array(dungeon.width).fill(tileTypes.WALL);
+            }
+
+            // Generate rooms
+            const numRooms = 5 + Math.floor(Math.random() * 5);
+            for (let i = 0; i < numRooms; i++) {
+                const room = generateRoom();
+                if (placeRoom(room)) {
+                    dungeon.rooms.push(room);
+                }
+            }
+
+            // Connect rooms
+            for (let i = 1; i < dungeon.rooms.length; i++) {
+                connectRooms(dungeon.rooms[i-1], dungeon.rooms[i]);
+            }
+
+            // Place stairs in a random room (not the first one)
+            const stairsRoom = dungeon.rooms[1 + Math.floor(Math.random() * (dungeon.rooms.length - 1))];
+            const stairsX = stairsRoom.x + Math.floor(Math.random() * stairsRoom.width);
+            const stairsY = stairsRoom.y + Math.floor(Math.random() * stairsRoom.height);
+            dungeon.tiles[stairsY][stairsX] = tileTypes.STAIRS;
+
+            // Place shop in a random room
+            const shopRoom = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+            const shopX = shopRoom.x + Math.floor(Math.random() * shopRoom.width);
+            const shopY = shopRoom.y + Math.floor(Math.random() * shopRoom.height);
+            dungeon.tiles[shopY][shopX] = tileTypes.SHOP;
+
+            // Generate monsters and items
+            generateMonstersAndItems();
+
+            // Place player in the first room
+            const startRoom = dungeon.rooms[0];
+            player.x = startRoom.x + Math.floor(startRoom.width / 2);
+            player.y = startRoom.y + Math.floor(startRoom.height / 2);
+        }
+
+        function generateRoom() {
+            const minSize = 3;
+            const maxSize = 8;
+            return {
+                x: 0,
+                y: 0,
+                width: minSize + Math.floor(Math.random() * (maxSize - minSize + 1)),
+                height: minSize + Math.floor(Math.random() * (maxSize - minSize + 1))
+            };
+        }
+
+        function placeRoom(room) {
+            const padding = 1;
+            let attempts = 50;
+            while (attempts > 0) {
+                room.x = padding + Math.floor(Math.random() * (dungeon.width - room.width - padding * 2));
+                room.y = padding + Math.floor(Math.random() * (dungeon.height - room.height - padding * 2));
+
+                if (isRoomValid(room)) {
+                    for (let y = room.y; y < room.y + room.height; y++) {
+                        for (let x = room.x; x < room.x + room.width; x++) {
+                            dungeon.tiles[y][x] = tileTypes.FLOOR;
+                        }
+                    }
+                    return true;
+                }
+                attempts--;
+            }
+            return false;
+        }
+
+        function isRoomValid(room) {
+            const padding = 1;
+            for (let y = room.y - padding; y < room.y + room.height + padding; y++) {
+                for (let x = room.x - padding; x < room.x + room.width + padding; x++) {
+                    if (y < 0 || y >= dungeon.height || x < 0 || x >= dungeon.width || dungeon.tiles[y][x] === tileTypes.FLOOR) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function connectRooms(roomA, roomB) {
+            let x = roomA.x + Math.floor(roomA.width / 2);
+            let y = roomA.y + Math.floor(roomA.height / 2);
+            const targetX = roomB.x + Math.floor(roomB.width / 2);
+            const targetY = roomB.y + Math.floor(roomB.height / 2);
+
+            while (x !== targetX || y !== targetY) {
+                if (x !== targetX) {
+                    x += x < targetX ? 1 : -1;
+                } else if (y !== targetY) {
+                    y += y < targetY ? 1 : -1;
+                }
+                dungeon.tiles[y][x] = tileTypes.FLOOR;
+            }
+        }
+
+        function generateMonstersAndItems() {
+            const numMonsters = dungeon.level + 2;
+            const numItems = 3 + Math.floor(Math.random() * 3);
+
+            for (let i = 0; i < numMonsters; i++) {
+                const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+                const monster = {
+                    x: room.x + Math.floor(Math.random() * room.width),
+                    y: room.y + Math.floor(Math.random() * room.height),
+                    ...JSON.parse(JSON.stringify(monsterTypes[Math.floor(Math.random() * monsterTypes.length)]))
+                };
+                dungeon.monsters.push(monster);
+            }
+
+            for (let i = 0; i < numItems; i++) {
+                const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+                const item = {
+                    x: room.x + Math.floor(Math.random() * room.width),
+                    y: room.y + Math.floor(Math.random() * room.height),
+                    ...JSON.parse(JSON.stringify(itemTypes[Math.floor(Math.random() * itemTypes.length)]))
+                };
+                if (item.name === 'Coins') {
+                    item.value = dungeon.level + Math.floor(Math.random() * 10);
+                }
+                dungeon.items.push(item);
+            }
+        }
+
+        function checkForEncounters() {
+            // Check for stairs
+            if (dungeon.tiles[player.y][player.x] === tileTypes.STAIRS) {
+                dungeon.level++;
+                generateDungeon();
+                updateHUD();
+                alert(`You've reached level ${dungeon.level}!`);
+            }
+
+            // Check for shop
+            if (dungeon.tiles[player.y][player.x] === tileTypes.SHOP) {
+                openShop();
+            }
+
+            // Check for monsters
+            const monsterIndex = dungeon.monsters.findIndex(m => m.x === player.x && m.y === player.y);
+            if (monsterIndex !== -1) {
+                startCombat(dungeon.monsters[monsterIndex]);
+            }
+
+            // Check for items
+            const itemIndex = dungeon.items.findIndex(i => i.x === player.x && i.y === player.y);
+            if (itemIndex !== -1) {
+                const item = dungeon.items[itemIndex];
+                if (item.name === 'Coins') {
+                    player.coins += item.value;
+                } else {
+                    player.inventory.push(item);
+                }
+                dungeon.items.splice(itemIndex, 1);
+                updatePlayerMenu();
+                alert(`You found ${item.name}!`);
+            }
+        }
+
+        function openShop() {
+            const shopItems = [
+                { name: 'Healing Potion', price: 10 },
+                { name: 'Strength Potion', price: 15 },
+                { name: 'Dexterity Potion', price: 15 },
+                { name: 'Luck Potion', price: 15 }
+            ];
+
+            let shopMenu = 'Welcome to the shop! What would you like to buy?\n\n';
+            shopItems.forEach((item, index) => {
+                shopMenu += `${index + 1}. ${item.name} - ${item.price} coins\n`;
+            });
+            shopMenu += '\nEnter the number of the item you want to buy, or 0 to exit:';
+
+            const choice = parseInt(prompt(shopMenu));
+            if (choice > 0 && choice <= shopItems.length) {
+                const selectedItem = shopItems[choice - 1];
+                if (player.coins >= selectedItem.price) {
+                    player.coins -= selectedItem.price;
+                    const boughtItem = itemTypes.find(i => i.name === selectedItem.name);
+                    player.inventory.push(JSON.parse(JSON.stringify(boughtItem)));
+                    alert(`You bought a ${selectedItem.name}!`);
+                    updatePlayerMenu();
+                    updateHUD();
+                } else {
+                    alert("You don't have enough coins!");
+                }
+            }
+        }
+
+        function startCombat(monster) {
+            alert(`You encounter a ${monster.name}!`);
+            while (player.stats.hp > 0 && monster.hp > 0) {
+                // Player's turn
+                const damage = Math.max(1, player.stats.strength - (monster.strength / 2));
+                monster.hp -= damage;
+                alert(`You deal ${damage} damage to the ${monster.name}!`);
+
+                if (monster.hp <= 0) {
+                    alert(`You defeated the ${monster.name}!`);
+                    player.stats.xp += monster.xp;
+                    checkLevelUp();
+                    dungeon.monsters = dungeon.monsters.filter(m => m !== monster);
+                    return;
+                }
+
+                // Monster's turn
+                const monsterDamage = Math.max(1, monster.strength - (player.stats.dexterity / 2));
+                player.stats.hp -= monsterDamage;
+                alert(`The ${monster.name} deals ${monsterDamage} damage to you!`);
+
+                if (player.stats.hp <= 0) {
+                    gameOver();
+                    return;
+                }
+            }
+        }
+
+        function checkLevelUp() {
+            const xpThreshold = player.stats.level * 100;
+            if (player.stats.xp >= xpThreshold) {
+                player.stats.level++;
+                player.stats.xp -= xpThreshold;
+                player.stats.strength++;
+                player.stats.dexterity++;
+                player.stats.mana++;
+                player.stats.luck++;
+                player.stats.maxHp += 5;
+                player.stats.hp = player.stats.maxHp;
+                alert(`Level up! You are now level ${player.stats.level}!`);
+                updatePlayerMenu();
+            }
+        }
+
+        function gameOver() {
+            alert('Game Over! Your adventure has come to an end.');
+            saveProgress();
+            showMetaProgressionMenu();
+        }
+
+        function saveProgress() {
+            let persistentProgress = {
+                totalRuns: (parseInt(localStorage.getItem('totalRuns')) || 0) + 1,
+                highestLevel: Math.max(dungeon.level, parseInt(localStorage.getItem('highestLevel')) || 0),
+                totalCoins: (parseInt(localStorage.getItem('totalCoins')) || 0) + player.coins
+            };
+            
+            for (let key in persistentProgress) {
+                localStorage.setItem(key, persistentProgress[key]);
+            }
+        }
+
+        function showMetaProgressionMenu() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('meta-progression-menu').style.display = 'block';
+            
+            document.getElementById('total-runs').textContent = localStorage.getItem('totalRuns') || 0;
+            document.getElementById('highest-level').textContent = localStorage.getItem('highestLevel') || 1;
+            document.getElementById('total-coins').textContent = localStorage.getItem('totalCoins') || 0;
+        }
+
+        function buyUpgrade(stat) {
+            let totalCoins = parseInt(localStorage.getItem('totalCoins')) || 0;
+            if (totalCoins >= 10) {
+                totalCoins -= 10;
+                localStorage.setItem('totalCoins', totalCoins);
+                let upgrades = JSON.parse(localStorage.getItem('permanentUpgrades')) || {};
+                upgrades[stat] = (upgrades[stat] || 0) + 1;
+                localStorage.setItem('permanentUpgrades', JSON.stringify(upgrades));
+                showMetaProgressionMenu();
+            } else {
+                alert("Not enough coins!");
+            }
+        }
+
+        function startNewRun() {
+            document.getElementById('meta-progression-menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            applyPermanentUpgrades();
+            generateDungeon();
+            updateHUD();
+            gameLoop();
+        }
+
+        function applyPermanentUpgrades() {
+            let upgrades = JSON.parse(localStorage.getItem('permanentUpgrades')) || {};
+            for (let stat in upgrades) {
+                player.stats[stat] += upgrades[stat];
+            }
+        }
+
+        function updateHUD() {
+            const hudEl = document.getElementById('hud');
+            hudEl.innerHTML = `
+                LVL:${player.stats.level} | HP:${player.stats.hp}/${player.stats.maxHp} | XP:${player.stats.xp} 
+                | 💰:${player.coins} | 🪜:${dungeon.level}
+            `;
+        }
+
+        function updatePlayerMenu() {
+            const statsEl = document.getElementById('player-stats');
+            statsEl.innerHTML = '';
+            for (const [stat, value] of Object.entries(player.stats)) {
+                statsEl.innerHTML += `<div>${stat}: ${value}</div>`;
+            }
+
+            const inventoryEl = document.getElementById('inventory');
+            inventoryEl.innerHTML = '';
+            for (const item of player.inventory) {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'inventory-item';
+                itemEl.innerHTML = `
+                    <span>${item.emoji} ${item.name}</span>
+                    <button class="equip-btn" data-item="${item.name}">Use/Equip</button>
+                `;
+                inventoryEl.appendChild(itemEl);
+            }
+
+            document.querySelectorAll('.equip-btn').forEach(btn => {
+                btn.onclick = () => useItem(btn.dataset.item);
+            });
+
+            updateHUD();
+        }
+
+        function useItem(itemName) {
+            const item = player.inventory.find(i => i.name === itemName);
+            if (!item) return;
+
+            if (item.consumable) {
+                for (const stat in item) {
+                    if (typeof item[stat] === 'number' && stat !== 'x' && stat !== 'y') {
+                        player.stats[stat] += item[stat];
+                    }
+                }
+                player.inventory = player.inventory.filter(i => i !== item);
+                alert(`You used the ${item.name}!`);
+                //part 2
+            } else {
+                if (item.strength || item.dexterity) {
+                    if (player.equippedItems.weapon) {
+                        // Unequip current weapon
+                        for (const stat in player.equippedItems.weapon) {
+                            if (typeof player.equippedItems.weapon[stat] === 'number') {
+                                player.stats[stat] -= player.equippedItems.weapon[stat];
+                            }
+                        }
+                    }
+                    player.equippedItems.weapon = item;
+                } else if (item.hp) {
+                    if (player.equippedItems.armor) {
+                        // Unequip current armor
+                        player.stats.maxHp -= player.equippedItems.armor.hp;
+                        player.stats.hp = Math.min(player.stats.hp, player.stats.maxHp);
+                    }
+                    player.equippedItems.armor = item;
+                    player.stats.maxHp += item.hp;
+                    player.stats.hp += item.hp;
+                }
+
+                // Apply item stats
+                for (const stat in item) {
+                    if (typeof item[stat] === 'number' && stat !== 'x' && stat !== 'y') {
+                        player.stats[stat] += item[stat];
+                    }
+                }
+
+                alert(`You equipped the ${item.name}!`);
+            }
+
+            updatePlayerMenu();
+        }
+
+        // Race selection
+        const raceButtons = document.querySelectorAll('.race-btn');
+        const raceDescription = document.getElementById('race-description');
+        const readyButton = document.getElementById('ready-btn');
+
+        raceButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                player.race = button.dataset.race;
+                updateRaceDescription();
+                readyButton.style.display = 'block';
+            });
+        });
+
+        function updateRaceDescription() {
+            const descriptions = {
+                human: "+1 to all stats",
+                elf: "+3 to dexterity, +1 to mana",
+                dwarf: "+3 to strength, +1 to luck",
+                halfling: "+2 to dexterity, +2 to luck"
+            };
+            raceDescription.textContent = descriptions[player.race];
+        }
+
+        readyButton.addEventListener('click', () => {
+            applyRacialBonuses();
+            document.getElementById('start-menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            startNewRun();
+        });
+
+        function applyRacialBonuses() {
+            switch (player.race) {
+                case 'human':
+                    for (const stat in player.stats) {
+                        player.stats[stat]++;
+                    }
+                    break;
+                case 'elf':
+                    player.stats.dexterity += 3;
+                    player.stats.mana++;
+                    break;
+                case 'dwarf':
+                    player.stats.strength += 3;
+                    player.stats.luck++;
+                    break;
+                case 'halfling':
+                    player.stats.dexterity += 2;
+                    player.stats.luck += 2;
+                    break;
+            }
+            player.stats.maxHp = player.stats.hp = (player.race === 'elf' || player.race === 'halfling') ?
+                player.stats.dexterity + player.stats.luck :
+                player.stats.strength + player.stats.luck;
+        }
+
+        // Event listeners for meta-progression menu
+        document.getElementById('upgrade-strength').addEventListener('click', () => buyUpgrade('strength'));
+        document.getElementById('upgrade-dexterity').addEventListener('click', () => buyUpgrade('dexterity'));
+        document.getElementById('upgrade-luck').addEventListener('click', () => buyUpgrade('luck'));
+        document.getElementById('start-new-run').addEventListener('click', startNewRun);
+
+        // Menu button
+        document.getElementById('menu-btn').addEventListener('click', togglePlayerMenu);
+
+        // Close menu button
+        document.getElementById('close-menu').addEventListener('click', togglePlayerMenu);
+
+        // Initialize the game
+        function initGame() {
+            showMetaProgressionMenu();
+        }
+
+        // Start the game
+        initGame();
+    </script>
+</body>
+</html>
