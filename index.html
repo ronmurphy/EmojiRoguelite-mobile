@@ -215,8 +215,14 @@ let ctx;
 
 function resizeCanvas() {
     if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+       // if on computer...
+        // canvas.width = window.innerWidth;
+       // canvas.height = window.innerHeight;
+
+        // if on mobile
+        canvas.width = document.documentElement.clientWidth;
+        canvas.height = document.documentElement.clientHeight;
+
         
         // Adjust TILE_SIZE based on screen size
         const minDimension = Math.min(canvas.width, canvas.height);
