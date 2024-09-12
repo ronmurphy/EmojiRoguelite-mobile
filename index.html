@@ -58,31 +58,34 @@
             cursor: pointer;
         }
         #virtual-controller {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            width: 150px;
-            height: 150px;
-        }
-        .control-btn {
-            width: 50px;
-            height: 50px;
-            font-size: 24px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: rgba(255, 255, 255, 0.3);
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-        }
-        #up-btn { grid-column: 2; grid-row: 1; }
-        #left-btn { grid-column: 1; grid-row: 2; }
-        #right-btn { grid-column: 3; grid-row: 2; }
-        #down-btn { grid-column: 2; grid-row: 3; }
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 150px;
+    height: 150px;
+}
+
+.control-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.3);
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+#up-btn { grid-column: 2; grid-row: 1; }
+#left-btn { grid-column: 1; grid-row: 2; }
+#right-btn { grid-column: 3; grid-row: 2; }
+#down-btn { grid-column: 2; grid-row: 3; }
         #menu-btn {
             position: absolute;
             top: 10px;
@@ -422,6 +425,33 @@ function drawEntity(entity, x, y) {
         }
     }
 }
+
+function initVirtualController() {
+    const buttons = [
+        { id: 'up-btn', dx: 0, dy: -1 },
+        { id: 'down-btn', dx: 0, dy: 1 },
+        { id: 'left-btn', dx: -1, dy: 0 },
+        { id: 'right-btn', dx: 1, dy: 0 }
+    ];
+
+    buttons.forEach(button => {
+        const elem = document.getElementById(button.id);
+        if (elem) {
+            // Add touch event listeners
+            elem.addEventListener('touchstart', function(e) {
+                e.preventDefault(); // Prevent default touch behavior
+                movePlayer(button.dx, button.dy);
+            });
+
+            // Keep click event listeners for non-touch devices
+            elem.addEventListener('click', function(e) {
+                e.preventDefault(); // Prevent default click behavior
+                movePlayer(button.dx, button.dy);
+            });
+        }
+    });
+}
+
 
 function handleTrap(x, y) {
     const trapChance = Math.random();
@@ -1133,18 +1163,24 @@ function applyRacialBonuses() {
         // Initialize game state
         initializeGameState();
         
-        // We'll move generateDungeon() to startNewRun() or readyButton click event
-        // as it should happen after race selection
-        
         // Now it's safe to resize
         resizeCanvas();
         
-        // Add event listener for resizing
+        // Add event listeners
         window.addEventListener('resize', resizeCanvas);
-        // add keyboard control
         document.addEventListener('keydown', handleKeyDown);
+        
+        // Initialize virtual controller
+        initVirtualController();
 
-        // Show the meta-progression menu instead of immediately starting a new run
+                // Check if the device supports touch, show/hide virtual controller accordingly
+                if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            document.getElementById('virtual-controller').style.display = 'grid';
+        } else {
+            document.getElementById('virtual-controller').style.display = 'none';
+        }
+        
+        // Show the meta-progression menu
         showMetaProgressionMenu();
     } else {
         console.error("Canvas element not found!");
