@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Emoji Roguelite Adventure</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-
     <style>
         body, html {
             margin: 0;
@@ -141,14 +140,15 @@
     </div>
     <script>
         // Game constants
-        const TILE_SIZE = 32;
+        // const TILE_SIZE = 32;
         const VIEWPORT_WIDTH = 15;
-        const VIEWPORT_HEIGHT = 45;
+        const VIEWPORT_HEIGHT = 15;
         const VISIBLE_RADIUS = 5;
 
         // Game state
+        let TILE_SIZE = 32;
         let player;
-
+        let lastTime = 0;
         let dungeon = {
     level: 1,
     width: 50,
@@ -158,7 +158,7 @@
     monsters: [],
     items: []
 };
-
+        const BASE_ENEMY_MOVE_INTERVAL = 10000; // 10 seconds in milliseconds
         const tileTypes = {
             FLOOR: 0,
             WALL: 1,
@@ -201,10 +201,26 @@
 let ctx;
 
 // Update the resizeCanvas function
+// function resizeCanvas() {
+//     if (canvas) {
+//         canvas.width = window.innerWidth;
+//         canvas.height = window.innerHeight;
+//         if (dungeon && dungeon.tiles && player) {
+//             drawGame();
+//         }
+//     }
+// }
+
+
 function resizeCanvas() {
     if (canvas) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        
+        // Adjust TILE_SIZE based on screen size
+        const minDimension = Math.min(canvas.width, canvas.height);
+        TILE_SIZE = Math.floor(minDimension / Math.max(VIEWPORT_WIDTH, VIEWPORT_HEIGHT));
+        
         if (dungeon && dungeon.tiles && player) {
             drawGame();
         }
@@ -218,38 +234,86 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
         // Main game loop
-        function gameLoop() {
-    // Update game state
-    update();
-    // Render the game
+//         function gameLoop() {
+//     // Update game state
+//     update();
+//     // Render the game
+//     drawGame();
+//     // Schedule the next frame
+//     requestAnimationFrame(gameLoop);
+// }
+
+function gameLoop(currentTime) {
+    update(currentTime);
     drawGame();
-    // Schedule the next frame
     requestAnimationFrame(gameLoop);
 }
 
-        function update() {
-            // Update game state, monster movements, etc.
-            dungeon.monsters.forEach(monster => {
-                if (Math.abs(monster.x - player.x) <= 1 && Math.abs(monster.y - player.y) <= 1) {
-                    const dx = Math.sign(player.x - monster.x);
-                    const dy = Math.sign(player.y - monster.y);
-                    if (dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL) {
-                        monster.x += dx;
-                        monster.y += dy;
-                    }
-                } else {
-                    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-                    const validDirections = directions.filter(([dx, dy]) => 
-                        dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL
-                    );
-                    if (validDirections.length > 0) {
-                        const [dx, dy] = validDirections[Math.floor(Math.random() * validDirections.length)];
-                        monster.x += dx;
-                        monster.y += dy;
-                    }
-                }
-            });
+        // function update() {
+        //     // Update game state, monster movements, etc.
+        //     dungeon.monsters.forEach(monster => {
+        //         if (Math.abs(monster.x - player.x) <= 1 && Math.abs(monster.y - player.y) <= 1) {
+        //             const dx = Math.sign(player.x - monster.x);
+        //             const dy = Math.sign(player.y - monster.y);
+        //             if (dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL) {
+        //                 monster.x += dx;
+        //                 monster.y += dy;
+        //             }
+        //         } else {
+        //             const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        //             const validDirections = directions.filter(([dx, dy]) => 
+        //                 dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL
+        //             );
+        //             if (validDirections.length > 0) {
+        //                 const [dx, dy] = validDirections[Math.floor(Math.random() * validDirections.length)];
+        //                 monster.x += dx;
+        //                 monster.y += dy;
+        //             }
+        //         }
+        //     });
+        // }
+
+        function update(currentTime) {
+    if (!lastTime) lastTime = currentTime;
+    const deltaTime = currentTime - lastTime;
+    
+    const moveInterval = Math.max(1000, BASE_ENEMY_MOVE_INTERVAL - (dungeon.level - 1) * 1000);
+    
+    if (deltaTime >= moveInterval) {
+        moveEnemies();
+        lastTime = currentTime;
+    }
+}
+
+function moveEnemies() {
+    dungeon.monsters.forEach(monster => {
+        if (Math.abs(monster.x - player.x) <= 1 && Math.abs(monster.y - player.y) <= 1) {
+            // Monster is adjacent to player, move towards player
+            const dx = Math.sign(player.x - monster.x);
+            const dy = Math.sign(player.y - monster.y);
+            if (isValidMove(monster.x + dx, monster.y + dy)) {
+                monster.x += dx;
+                monster.y += dy;
+            }
+        } else {
+            // Monster is not adjacent to player, move randomly
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            const validDirections = directions.filter(([dx, dy]) =>
+                isValidMove(monster.x + dx, monster.y + dy)
+            );
+            if (validDirections.length > 0) {
+                const [dx, dy] = validDirections[Math.floor(Math.random() * validDirections.length)];
+                monster.x += dx;
+                monster.y += dy;
+            }
         }
+    });
+}
+
+function isValidMove(x, y) {
+    return x >= 0 && x < dungeon.width && y >= 0 && y < dungeon.height && 
+           dungeon.tiles[y][x] !== tileTypes.WALL;
+}
 
         function drawGame() {
     if (!ctx || !dungeon || !dungeon.tiles || !player) {
