@@ -2,29 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Emoji Roguelite Adventure</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">    <title>Emoji Roguelite Adventure</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <style>
         body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            font-family: "Noto Sans", sans-serif;
-            overflow: hidden;
-            touch-action: manipulation;
-        }
-        #game-container {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        #game-canvas {
-            flex-grow: 1;
-        }
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#game-canvas {
+    flex-grow: 1;
+}
         #hud {
             position: absolute;
             top: 10px;
@@ -186,6 +185,8 @@
         const itemTypes = [
             { name: 'Long Sword', emoji: '🗡️', strength: 10 },
             { name: 'Short Sword', emoji: '🗡️', strength: 8 },
+            { name: 'Axe', emoji: '🪓', strength: 9 },
+            { name: 'Boomerang', emoji: '🪃', strength: 7 },
             { name: 'Bow', emoji: '🏹', strength: 4, dexterity: 2 },
             { name: 'Leather Armor', emoji: '🧥', hp: 5 },
             { name: 'Mace', emoji: '🏏', strength: 8 },
@@ -194,7 +195,8 @@
             { name: 'Strength Potion', emoji: '💪', strength: 2, duration: 5, consumable: true },
             { name: 'Dexterity Potion', emoji: '🏃', dexterity: 2, duration: 5, consumable: true },
             { name: 'Luck Potion', emoji: '🍀', luck: 2, duration: 5, consumable: true },
-            { name: 'Coins', emoji: '💰', value: 0 }
+            { name: 'Coins', emoji: '💰', value: 0 },
+            { name: 'Gems', emoji: '💎', value: 0 }
         ];
 
         const skillTypes = [
@@ -208,53 +210,37 @@
         let canvas;
 let ctx;
 
-// Update the resizeCanvas function
-// function resizeCanvas() {
-//     if (canvas) {
-//         canvas.width = window.innerWidth;
-//         canvas.height = window.innerHeight;
-//         if (dungeon && dungeon.tiles && player) {
-//             drawGame();
-//         }
-//     }
-// }
 
 
 function resizeCanvas() {
     if (canvas) {
-        // if on pc
-        //canvas.width = window.innerWidth;
-        //canvas.height = window.innerHeight;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
         
-        // if on mobile
-        canvas.width = document.documentElement.clientWidth;
-        canvas.height = document.documentElement.clientHeight;
+        // Calculate the number of tiles that should fit on the screen
+        const tilesX = VIEWPORT_WIDTH;
+        const tilesY = VIEWPORT_HEIGHT;
         
-        // Adjust TILE_SIZE based on screen size
-        const minDimension = Math.min(canvas.width, canvas.height);
-        TILE_SIZE = Math.floor(minDimension / Math.max(VIEWPORT_WIDTH, VIEWPORT_HEIGHT));
+        // Calculate TILE_SIZE based on the smaller dimension
+        TILE_SIZE = Math.floor(Math.min(
+            canvas.width / tilesX,
+            canvas.height / tilesY
+        ));
         
         if (dungeon && dungeon.tiles && player) {
             drawGame();
         }
     }
 }
-
 // Add event listener for window resize
 window.addEventListener('resize', resizeCanvas);
+
+window.addEventListener('orientationchange', resizeCanvas);
 
 // Call resizeCanvas initially
 resizeCanvas();
 
-        // Main game loop
-//         function gameLoop() {
-//     // Update game state
-//     update();
-//     // Render the game
-//     drawGame();
-//     // Schedule the next frame
-//     requestAnimationFrame(gameLoop);
-// }
+
 
 function gameLoop(currentTime) {
     update(currentTime);
@@ -262,31 +248,7 @@ function gameLoop(currentTime) {
     requestAnimationFrame(gameLoop);
 }
 
-        // function update() {
-        //     // Update game state, monster movements, etc.
-        //     dungeon.monsters.forEach(monster => {
-        //         if (Math.abs(monster.x - player.x) <= 1 && Math.abs(monster.y - player.y) <= 1) {
-        //             const dx = Math.sign(player.x - monster.x);
-        //             const dy = Math.sign(player.y - monster.y);
-        //             if (dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL) {
-        //                 monster.x += dx;
-        //                 monster.y += dy;
-        //             }
-        //         } else {
-        //             const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        //             const validDirections = directions.filter(([dx, dy]) => 
-        //                 dungeon.tiles[monster.y + dy][monster.x + dx] !== tileTypes.WALL
-        //             );
-        //             if (validDirections.length > 0) {
-        //                 const [dx, dy] = validDirections[Math.floor(Math.random() * validDirections.length)];
-        //                 monster.x += dx;
-        //                 monster.y += dy;
-        //             }
-        //         }
-        //     });
-        // }
-
-        function update(currentTime) {
+         function update(currentTime) {
     if (!lastTime) lastTime = currentTime;
     const deltaTime = currentTime - lastTime;
     
@@ -328,7 +290,7 @@ function isValidMove(x, y) {
            dungeon.tiles[y][x] !== tileTypes.WALL;
 }
 
-        function drawGame() {
+function drawGame() {
     if (!ctx || !dungeon || !dungeon.tiles || !player) {
         console.log("Game state not fully initialized yet");
         return;
@@ -336,19 +298,27 @@ function isValidMove(x, y) {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calculate viewport boundaries
-    const startX = Math.max(0, Math.floor(player.x - VIEWPORT_WIDTH / 2));
-    const startY = Math.max(0, Math.floor(player.y - VIEWPORT_HEIGHT / 2));
-    const endX = Math.min(dungeon.width, startX + VIEWPORT_WIDTH);
-    const endY = Math.min(dungeon.height, startY + VIEWPORT_HEIGHT);
+    // Calculate the number of tiles that can fit on the screen
+    const tilesX = Math.floor(canvas.width / TILE_SIZE);
+    const tilesY = Math.floor(canvas.height / TILE_SIZE);
+    
+    // Calculate the start and end of the viewport, centered on the player
+    const startX = Math.max(0, Math.floor(player.x - tilesX / 2));
+    const startY = Math.max(0, Math.floor(player.y - tilesY / 2));
+    const endX = Math.min(dungeon.width, startX + tilesX);
+    const endY = Math.min(dungeon.height, startY + tilesY);
+
+    // Calculate offset to center the view and account for partial tiles
+    const offsetX = Math.floor((canvas.width - (endX - startX) * TILE_SIZE) / 2);
+    const offsetY = Math.floor((canvas.height - (endY - startY) * TILE_SIZE) / 2);
 
     // Draw tiles
     for (let y = startY; y < endY; y++) {
         if (dungeon.tiles[y]) {
             for (let x = startX; x < endX; x++) {
                 if (dungeon.tiles[y][x] !== undefined) {
-                    const screenX = (x - startX) * TILE_SIZE;
-                    const screenY = (y - startY) * TILE_SIZE;
+                    const screenX = (x - startX) * TILE_SIZE + offsetX;
+                    const screenY = (y - startY) * TILE_SIZE + offsetY;
                     drawTile(dungeon.tiles[y][x], screenX, screenY);
                 }
             }
@@ -358,8 +328,8 @@ function isValidMove(x, y) {
     // Draw items
     dungeon.items.forEach(item => {
         if (item.x >= startX && item.x < endX && item.y >= startY && item.y < endY) {
-            const screenX = (item.x - startX) * TILE_SIZE;
-            const screenY = (item.y - startY) * TILE_SIZE;
+            const screenX = (item.x - startX) * TILE_SIZE + offsetX;
+            const screenY = (item.y - startY) * TILE_SIZE + offsetY;
             drawEntity(item, screenX, screenY);
         }
     });
@@ -367,15 +337,15 @@ function isValidMove(x, y) {
     // Draw monsters
     dungeon.monsters.forEach(monster => {
         if (monster.x >= startX && monster.x < endX && monster.y >= startY && monster.y < endY) {
-            const screenX = (monster.x - startX) * TILE_SIZE;
-            const screenY = (monster.y - startY) * TILE_SIZE;
+            const screenX = (monster.x - startX) * TILE_SIZE + offsetX;
+            const screenY = (monster.y - startY) * TILE_SIZE + offsetY;
             drawEntity(monster, screenX, screenY);
         }
     });
 
     // Draw player
-    const playerScreenX = (player.x - startX) * TILE_SIZE;
-    const playerScreenY = (player.y - startY) * TILE_SIZE;
+    const playerScreenX = (player.x - startX) * TILE_SIZE + offsetX;
+    const playerScreenY = (player.y - startY) * TILE_SIZE + offsetY;
     drawEntity(player, playerScreenX, playerScreenY);
 }
 
@@ -631,6 +601,9 @@ function generateMonstersAndItems() {
         };
         if (item.name === 'Coins') {
             item.value = dungeon.level + Math.floor(Math.random() * 10);
+        }
+        if (item.name === 'Gems') {
+            item.value = dungeon.level + Math.floor(Math.random() * 25);
         }
         dungeon.items.push(item);
     }
