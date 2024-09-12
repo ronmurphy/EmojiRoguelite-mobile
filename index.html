@@ -93,6 +93,10 @@
             color: white;
             cursor: pointer;
         }
+        .race-btn.selected {
+    background-color: #4CAF50;
+    color: white;
+}
     </style>
 </head>
 <body>
@@ -111,10 +115,10 @@
         <h1>Emoji Roguelite Adventure</h1>
         <h2>Choose your race:</h2>
         <div id="race-selection">
-            <button class="menu-btn race-btn" data-race="human">Human 👨</button>
-            <button class="menu-btn race-btn" data-race="elf">Elf 🧝</button>
-            <button class="menu-btn race-btn" data-race="dwarf">Dwarf 🧔</button>
-            <button class="menu-btn race-btn" data-race="halfling">Halfling 🧒</button>
+            <button class="menu-btn race-btn" data-race="human" data-emoji="👨">Human 👨</button>
+            <button class="menu-btn race-btn" data-race="elf" data-emoji="🧝">Elf 🧝</button>
+            <button class="menu-btn race-btn" data-race="dwarf" data-emoji="🧔">Dwarf 🧔</button>
+            <button class="menu-btn race-btn" data-race="halfling" data-emoji="🧒">Halfling 🧒</button>
         </div>
         <p id="race-description"></p>
         <button id="ready-btn" class="menu-btn" style="display: none;">Ready</button>
@@ -159,28 +163,31 @@
 };
         const BASE_ENEMY_MOVE_INTERVAL = 10000; // 10 seconds in milliseconds
         const tileTypes = {
-            FLOOR: 0,
-            WALL: 1,
-            DOOR: 2,
-            STAIRS: 3,
-            SHOP: 4
-        };
+    FLOOR: 0,
+    WALL: 1,
+    DOOR: 2,
+    STAIRS: 3,
+    SHOP: 4,
+    TRAP: 5,
+    LOCKED_DOOR: 6,
+    REVEALED_TRAP: 7
+};
 
         const monsterTypes = [
-            { name: 'Rat', emoji: '🐀', hp: 5, strength: 2, xp: 5 },
-            { name: 'Slime', emoji: '🟢', hp: 6, strength: 3, xp: 7 },
-            { name: 'Fairy',emoji: '🧚🏾', hp: 7, strength: 4, xp: 15},
-            { name: 'Giant Bug', emoji: '🪲', hp: 8, strength: 4, xp: 8 },
-            { name: 'Goblin', emoji: '👺', hp: 10, strength: 5, xp: 10 },
-            { name: 'Skeleton', emoji: '💀', hp: 12, strength: 6, xp: 12 },
-            { name: 'Ghost', emoji: '👻', hp: 15, strength: 7, xp: 15 },
-            { name: 'Zombie',emoji: '🧟', hp: 12, strength: 10, xp: 12},
-            { name: 'Werewolf',emoji: '🐺', hp: 17, strength: 12, xp: 20},
-            { name: 'Vampire',emoji: '🧛', hp: 20, strength: 15, xp: 23},
-            { name: 'Orc',emoji: '👹', hp: 25, strength: 20, xp: 25},
-            { name: 'Troll',emoji: '🧌', hp: 35, strength: 22, xp: 30},
-            { name: 'Dragon', emoji: '🐉', hp: 40, strength: 10, xp: 35 }
-            ];
+    { name: 'Rat', emoji: '🐀', hp: 5, strength: 2, xp: 5, minLevel: 1 },
+    { name: 'Slime', emoji: '🟢', hp: 6, strength: 3, xp: 7, minLevel: 1 },
+    { name: 'Fairy', emoji: '🧚🏾', hp: 7, strength: 4, xp: 15, minLevel: 2 },
+    { name: 'Giant Bug', emoji: '🪲', hp: 8, strength: 4, xp: 8, minLevel: 2 },
+    { name: 'Goblin', emoji: '👺', hp: 10, strength: 5, xp: 10, minLevel: 3 },
+    { name: 'Skeleton', emoji: '💀', hp: 12, strength: 6, xp: 12, minLevel: 4 },
+    { name: 'Ghost', emoji: '👻', hp: 15, strength: 7, xp: 15, minLevel: 5 },
+    { name: 'Zombie', emoji: '🧟', hp: 12, strength: 10, xp: 12, minLevel: 6 },
+    { name: 'Werewolf', emoji: '🐺', hp: 17, strength: 12, xp: 20, minLevel: 7 },
+    { name: 'Vampire', emoji: '🧛', hp: 20, strength: 15, xp: 23, minLevel: 8 },
+    { name: 'Orc', emoji: '👹', hp: 25, strength: 20, xp: 25, minLevel: 9 },
+    { name: 'Troll', emoji: '🧌', hp: 35, strength: 22, xp: 30, minLevel: 10 },
+    { name: 'Dragon', emoji: '🐉', hp: 40, strength: 10, xp: 35, minLevel: 12 }
+];
 
         const itemTypes = [
             { name: 'Long Sword', emoji: '🗡️', strength: 10 },
@@ -357,11 +364,23 @@ function drawTile(tileType, x, y) {
         case tileTypes.WALL:
             ctx.fillStyle = '#666';
             break;
+        case tileTypes.DOOR:
+            ctx.fillStyle = '#8B4513';
+            break;
         case tileTypes.STAIRS:
             ctx.fillStyle = '#FFD700';
             break;
         case tileTypes.SHOP:
             ctx.fillStyle = '#4169E1';
+            break;
+        case tileTypes.TRAP:
+            ctx.fillStyle = '#CCC'; // Same as floor, it's hidden
+            break;
+        case tileTypes.LOCKED_DOOR:
+            ctx.fillStyle = '#A52A2A';
+            break;
+        case tileTypes.REVEALED_TRAP:
+            ctx.fillStyle = '#FF69B4';
             break;
         default:
             ctx.fillStyle = '#FF00FF'; // Magenta for unknown tile types
@@ -378,30 +397,52 @@ function drawEntity(entity, x, y) {
 
         // Input handling
         function movePlayer(dx, dy) {
-            const newX = player.x + dx;
-            const newY = player.y + dy;
-            if (newX >= 0 && newX < dungeon.width && newY >= 0 && newY < dungeon.height && 
-                dungeon.tiles[newY][newX] !== tileTypes.WALL) {
+    const newX = player.x + dx;
+    const newY = player.y + dy;
+    if (newX >= 0 && newX < dungeon.width && newY >= 0 && newY < dungeon.height) {
+        const tileType = dungeon.tiles[newY][newX];
+        if (tileType === tileTypes.FLOOR || tileType === tileTypes.TRAP || tileType === tileTypes.REVEALED_TRAP) {
+            player.x = newX;
+            player.y = newY;
+            if (tileType === tileTypes.TRAP) {
+                handleTrap(newX, newY);
+            }
+            checkForEncounters();
+            drawGame();  // Redraw the game after moving
+        } else if (tileType === tileTypes.LOCKED_DOOR) {
+            const door = dungeon.lockedDoors.find(door => door.x === newX && door.y === newY);
+            if (door && player.inventory.some(item => item.name === 'Key' && item.doorId === door.id)) {
+                unlockDoor(door);
                 player.x = newX;
                 player.y = newY;
-                checkForEncounters();
+                drawGame();  // Redraw the game after moving
+            } else {
+                alert("This door is locked. You need a key to open it.");
             }
         }
+    }
+}
 
-        document.getElementById('up-btn').addEventListener('click', () => movePlayer(0, -1));
-        document.getElementById('down-btn').addEventListener('click', () => movePlayer(0, 1));
-        document.getElementById('left-btn').addEventListener('click', () => movePlayer(-1, 0));
-        document.getElementById('right-btn').addEventListener('click', () => movePlayer(1, 0));
+function handleTrap(x, y) {
+    const trapChance = Math.random();
+    if (trapChance > player.stats.luck / 100) {
+        const damage = Math.floor(Math.random() * 5) + 1;
+        player.stats.hp -= damage;
+        alert(`You triggered a trap! You take ${damage} damage.`);
+        if (player.stats.hp <= 0) {
+            gameOver();
+        }
+    } else {
+        alert("Your luck allowed you to avoid the trap!");
+    }
+    dungeon.tiles[y][x] = tileTypes.REVEALED_TRAP;
+}
 
-        document.addEventListener('keydown', (e) => {
-            switch (e.key) {
-                case 'ArrowUp': movePlayer(0, -1); break;
-                case 'ArrowDown': movePlayer(0, 1); break;
-                case 'ArrowLeft': movePlayer(-1, 0); break;
-                case 'ArrowRight': movePlayer(1, 0); break;
-                case 'i': togglePlayerMenu(); break;
-            }
-        });
+function unlockDoor(door) {
+    dungeon.tiles[door.y][door.x] = tileTypes.FLOOR;
+    player.inventory = player.inventory.filter(item => !(item.name === 'Key' && item.doorId === door.id));
+    alert("You unlocked the door!");
+}
 
  // end part 1
  function togglePlayerMenu() {
@@ -429,7 +470,7 @@ function drawEntity(entity, x, y) {
     player.x = 0;
     player.y = 0;
     player.race = '';
-    player.emoji = '😊';
+    player.emoji = '👤'; // Default emoji if no race is selected
     player.stats = {
         strength: 5,
         dexterity: 5,
@@ -450,22 +491,31 @@ function drawEntity(entity, x, y) {
 }
 
 function generateDungeon() {
+    // Cap the dungeon level at 15
+    dungeon.level = Math.min(dungeon.level, 15);
+
+    // Scale dungeon size with level
+    dungeon.width = 50 + (dungeon.level * 2);
+    dungeon.height = 50 + (dungeon.level * 2);
+
     dungeon.tiles = [];
     dungeon.rooms = [];
     dungeon.monsters = [];
     dungeon.items = [];
+    dungeon.traps = [];
+    dungeon.lockedDoors = [];
+    dungeon.keys = [];
 
     // Initialize tiles with walls
     for (let y = 0; y < dungeon.height; y++) {
         dungeon.tiles[y] = [];
         for (let x = 0; x < dungeon.width; x++) {
-            // Initialize with a default tile type (e.g., WALL)
             dungeon.tiles[y][x] = tileTypes.WALL;
         }
     }
 
     // Generate rooms
-    const numRooms = 5 + Math.floor(Math.random() * 5);
+    const numRooms = 5 + Math.floor(dungeon.level * 1.5);
     for (let i = 0; i < numRooms; i++) {
         const room = generateRoom();
         if (placeRoom(room)) {
@@ -490,14 +540,59 @@ function generateDungeon() {
     const shopY = shopRoom.y + Math.floor(Math.random() * shopRoom.height);
     dungeon.tiles[shopY][shopX] = tileTypes.SHOP;
 
+    // Place traps
+    const numTraps = Math.floor(dungeon.level * 1.5);
+    for (let i = 0; i < numTraps; i++) {
+        placeTrap();
+    }
+
+    // Place locked doors and keys
+    const numLockedDoors = Math.floor(dungeon.level / 3);
+    for (let i = 0; i < numLockedDoors; i++) {
+        placeLockedDoorAndKey();
+    }
+
     // Generate monsters and items
     generateMonstersAndItems();
 
-    // // Place player in the first room
-    // const startRoom = dungeon.rooms[0];
-    // player.x = startRoom.x + Math.floor(startRoom.width / 2);
-    // player.y = startRoom.y + Math.floor(startRoom.height / 2);
     placePlayerInValidPosition();
+}
+
+function placeTrap() {
+    let x, y;
+    do {
+        const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        x = room.x + Math.floor(Math.random() * room.width);
+        y = room.y + Math.floor(Math.random() * room.height);
+    } while (dungeon.tiles[y][x] !== tileTypes.FLOOR);
+    
+    dungeon.tiles[y][x] = tileTypes.TRAP;
+    dungeon.traps.push({x, y});
+}
+
+function placeLockedDoorAndKey() {
+    // Place locked door
+    let doorX, doorY;
+    do {
+        const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        doorX = room.x + Math.floor(Math.random() * room.width);
+        doorY = room.y + Math.floor(Math.random() * room.height);
+    } while (dungeon.tiles[doorY][doorX] !== tileTypes.FLOOR);
+    
+    dungeon.tiles[doorY][doorX] = tileTypes.LOCKED_DOOR;
+    const doorId = dungeon.lockedDoors.length;
+    dungeon.lockedDoors.push({x: doorX, y: doorY, id: doorId});
+
+    // Place key in a different room
+    let keyX, keyY, keyRoom;
+    do {
+        keyRoom = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        keyX = keyRoom.x + Math.floor(Math.random() * keyRoom.width);
+        keyY = keyRoom.y + Math.floor(Math.random() * keyRoom.height);
+    } while (dungeon.tiles[keyY][keyX] !== tileTypes.FLOOR || (keyRoom === dungeon.rooms.find(room => doorX >= room.x && doorX < room.x + room.width && doorY >= room.y && doorY < room.y + room.height)));
+    
+    dungeon.keys.push({x: keyX, y: keyY, id: doorId});
+    dungeon.items.push({x: keyX, y: keyY, name: 'Key', emoji: '🔑', doorId: doorId});
 }
 
 function placePlayerInValidPosition() {
@@ -579,19 +674,47 @@ function generateMonstersAndItems() {
     const numMonsters = dungeon.level + 2;
     const numItems = 3 + Math.floor(Math.random() * 3);
 
+    // Filter monsters based on dungeon level
+    const availableMonsters = monsterTypes.filter(monster => monster.minLevel <= dungeon.level);
+
     for (let i = 0; i < numMonsters; i++) {
         const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
+        
+        // Weighted random selection favoring stronger monsters in higher levels
+        let totalWeight = 0;
+        const weights = availableMonsters.map(monster => {
+            const weight = monster.xp * (dungeon.level - monster.minLevel + 1);
+            totalWeight += weight;
+            return weight;
+        });
+
+        let randomWeight = Math.random() * totalWeight;
+        let selectedMonsterIndex = 0;
+        for (let j = 0; j < weights.length; j++) {
+            randomWeight -= weights[j];
+            if (randomWeight <= 0) {
+                selectedMonsterIndex = j;
+                break;
+            }
+        }
+
+        const monsterTemplate = availableMonsters[selectedMonsterIndex];
         const monster = {
             x: room.x + Math.floor(Math.random() * room.width),
             y: room.y + Math.floor(Math.random() * room.height),
-            ...JSON.parse(JSON.stringify(monsterTypes[Math.floor(Math.random() * monsterTypes.length)]))
+            ...JSON.parse(JSON.stringify(monsterTemplate))
         };
-        monster.hp += Math.floor(dungeon.level / 2);
-        monster.strength += Math.floor(dungeon.level / 3);
-        monster.xp += dungeon.level * 2;
+
+        // Scale monster stats based on dungeon level
+        const levelDifference = dungeon.level - monster.minLevel;
+        monster.hp += Math.floor(levelDifference * 1.5);
+        monster.strength += Math.floor(levelDifference * 0.5);
+        monster.xp += Math.floor(levelDifference * 2);
+
         dungeon.monsters.push(monster);
     }
 
+    // Item generation remains the same
     for (let i = 0; i < numItems; i++) {
         const room = dungeon.rooms[Math.floor(Math.random() * dungeon.rooms.length)];
         const item = {
@@ -623,6 +746,9 @@ function generateMonstersAndItems() {
                 openShop();
             }
 
+
+
+
             // Check for monsters
             const monsterIndex = dungeon.monsters.findIndex(m => m.x === player.x && m.y === player.y);
             if (monsterIndex !== -1) {
@@ -631,17 +757,22 @@ function generateMonstersAndItems() {
 
             // Check for items
             const itemIndex = dungeon.items.findIndex(i => i.x === player.x && i.y === player.y);
-            if (itemIndex !== -1) {
-                const item = dungeon.items[itemIndex];
-                if (item.name === 'Coins') {
-                    player.coins += item.value;
-                } else {
-                    player.inventory.push(item);
-                }
-                dungeon.items.splice(itemIndex, 1);
-                updatePlayerMenu();
-                alert(`You found ${item.name}!`);
-            }
+    if (itemIndex !== -1) {
+        const item = dungeon.items[itemIndex];
+        if (item.name === 'Key') {
+            player.inventory.push(item);
+            alert(`You found a key!`);
+        } else if (item.name === 'Coins') {
+            player.coins += item.value;
+        } else {
+            player.inventory.push(item);
+        }
+        dungeon.items.splice(itemIndex, 1);
+        updatePlayerMenu();
+        if (item.name !== 'Key') {
+            alert(`You found ${item.name}!`);
+        }
+    }
         }
 
         function openShop() {
@@ -759,20 +890,43 @@ function generateMonstersAndItems() {
             }
         }
 
+        function handleKeyDown(e) {
+    switch (e.key) {
+        case 'ArrowUp':
+            movePlayer(0, -1);
+            break;
+        case 'ArrowDown':
+            movePlayer(0, 1);
+            break;
+        case 'ArrowLeft':
+            movePlayer(-1, 0);
+            break;
+        case 'ArrowRight':
+            movePlayer(1, 0);
+            break;
+        case 'i':
+            togglePlayerMenu();
+            break;
+    }
+}
+
+// Add this event listener to the document
+document.addEventListener('keydown', handleKeyDown);
+
+        
         function startNewRun() {
     console.log("Starting new run...");
     document.getElementById('meta-progression-menu').style.display = 'none';
-    document.getElementById('game-container').style.display = 'block';
+    document.getElementById('start-menu').style.display = 'block';
+    document.getElementById('game-container').style.display = 'none';
     
-    initializeGameState(); // Reset game state
+    // Reset player object entirely
+    initializeGameState();
     
-    applyPermanentUpgrades();
-    applyRacialBonuses();
-    generateDungeon();
-    updateHUD();
-    
-    // Start the game loop
-    gameLoop();
+    // Reset race selection UI
+    document.querySelectorAll('.race-btn').forEach(btn => btn.classList.remove('selected'));
+    document.getElementById('race-description').textContent = '';
+    document.getElementById('ready-btn').style.display = 'none';
 }
 
         function applyPermanentUpgrades() {
@@ -870,12 +1024,19 @@ function generateMonstersAndItems() {
         const readyButton = document.getElementById('ready-btn');
 
         raceButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                player.race = button.dataset.race;
-                updateRaceDescription();
-                readyButton.style.display = 'block';
-            });
-        });
+    button.addEventListener('click', () => {
+        // Remove 'selected' class from all buttons
+        raceButtons.forEach(btn => btn.classList.remove('selected'));
+        // Add 'selected' class to clicked button
+        button.classList.add('selected');
+        
+        player.race = button.dataset.race;
+        player.emoji = button.dataset.emoji; // Directly set the emoji here
+        console.log(`Race selected: ${player.race}, Emoji: ${player.emoji}`); // Debug log
+        updateRaceDescription();
+        readyButton.style.display = 'block';
+    });
+});
 
         function updateRaceDescription() {
             const descriptions = {
@@ -888,35 +1049,58 @@ function generateMonstersAndItems() {
         }
 
         readyButton.addEventListener('click', () => {
-            applyRacialBonuses();
-            document.getElementById('start-menu').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
-            startNewRun();
-        });
+    if (!player.race) {
+        alert("Please select a race before starting the game.");
+        return;
+    }
 
-        function applyRacialBonuses() {
+    document.getElementById('start-menu').style.display = 'none';
+    document.getElementById('game-container').style.display = 'block';
+    
+    // Apply upgrades and bonuses
+    applyPermanentUpgrades();
+    applyRacialBonuses();
+    
+    // Generate dungeon and update HUD
+    generateDungeon();
+    updateHUD();
+    
+    console.log(`Game starting with race: ${player.race}, emoji: ${player.emoji}`); // Debug log
+    
+    // Start the game loop
+    gameLoop();
+    
+    // Make sure the canvas is properly sized
+    resizeCanvas();
+});
+
+function applyRacialBonuses() {
     if (!player.race) {
         console.warn("Player race not set. Skipping racial bonuses.");
         return;
     }
-    
+    console.log(`Applying racial bonuses for ${player.race}, Current emoji: ${player.emoji}`); // Debug log
     switch (player.race) {
         case 'human':
             for (const stat in player.stats) {
                 player.stats[stat]++;
             }
+            player.emoji = '👨';
             break;
         case 'elf':
             player.stats.dexterity += 3;
             player.stats.mana++;
+            player.emoji = '🧝';
             break;
         case 'dwarf':
             player.stats.strength += 3;
             player.stats.luck++;
+            player.emoji = '🧔';
             break;
         case 'halfling':
             player.stats.dexterity += 2;
             player.stats.luck += 2;
+            player.emoji = '🧒';
             break;
     }
     
@@ -924,6 +1108,7 @@ function generateMonstersAndItems() {
     player.stats.maxHp = player.stats.hp = (player.race === 'elf' || player.race === 'halfling') ?
         player.stats.dexterity + player.stats.luck :
         player.stats.strength + player.stats.luck;
+        console.log(`After applying bonuses, emoji: ${player.emoji}`); // Debug log
 }
 
         // Event listeners for meta-progression menu
@@ -948,16 +1133,18 @@ function generateMonstersAndItems() {
         // Initialize game state
         initializeGameState();
         
-        // Generate initial dungeon
-        generateDungeon();
+        // We'll move generateDungeon() to startNewRun() or readyButton click event
+        // as it should happen after race selection
         
-        // Now it's safe to resize and draw
+        // Now it's safe to resize
         resizeCanvas();
         
         // Add event listener for resizing
         window.addEventListener('resize', resizeCanvas);
-        
-        // Show the start menu
+        // add keyboard control
+        document.addEventListener('keydown', handleKeyDown);
+
+        // Show the meta-progression menu instead of immediately starting a new run
         showMetaProgressionMenu();
     } else {
         console.error("Canvas element not found!");
