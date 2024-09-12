@@ -150,11 +150,17 @@
         const VIEWPORT_WIDTH = 15;
         const VIEWPORT_HEIGHT = 15;
         const VISIBLE_RADIUS = 5;
+        const moveDebounceTime = 200; // Milliseconds
 
         // Game state
         let TILE_SIZE = 32;
         let player;
         let lastTime = 0;
+        let lastMoveTime = 0;
+
+
+
+
         let dungeon = {
     level: 1,
     width: 50,
@@ -400,6 +406,12 @@ function drawEntity(entity, x, y) {
 
         // Input handling
         function movePlayer(dx, dy) {
+    const currentTime = Date.now();
+    if (currentTime - lastMoveTime < moveDebounceTime) {
+        return; // Ignore this move if it's too soon after the last one
+    }
+    lastMoveTime = currentTime;
+
     const newX = player.x + dx;
     const newY = player.y + dy;
     if (newX >= 0 && newX < dungeon.width && newY >= 0 && newY < dungeon.height) {
@@ -437,15 +449,24 @@ function initVirtualController() {
     buttons.forEach(button => {
         const elem = document.getElementById(button.id);
         if (elem) {
-            // Add touch event listeners
+            let touchStarted = false;
+
             elem.addEventListener('touchstart', function(e) {
-                e.preventDefault(); // Prevent default touch behavior
-                movePlayer(button.dx, button.dy);
+                e.preventDefault();
+                if (!touchStarted) {
+                    touchStarted = true;
+                    movePlayer(button.dx, button.dy);
+                }
+            });
+
+            elem.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                touchStarted = false;
             });
 
             // Keep click event listeners for non-touch devices
-            elem.addEventListener('click', function(e) {
-                e.preventDefault(); // Prevent default click behavior
+            elem.addEventListener('mousedown', function(e) {
+                e.preventDefault();
                 movePlayer(button.dx, button.dy);
             });
         }
