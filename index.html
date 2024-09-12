@@ -94,7 +94,6 @@
             color: white;
             cursor: pointer;
         }
-        #game-canvas { position: absolute; width: 100%; height: 100%; overflow: hidden }
     </style>
 </head>
 <body>
@@ -142,8 +141,8 @@
     <script>
         // Game constants
         // const TILE_SIZE = 32;
-        const VIEWPORT_WIDTH = 20;
-        const VIEWPORT_HEIGHT = 30;
+        const VIEWPORT_WIDTH = 15;
+        const VIEWPORT_HEIGHT = 15;
         const VISIBLE_RADIUS = 5;
 
         // Game state
@@ -170,12 +169,19 @@
 
         const monsterTypes = [
             { name: 'Rat', emoji: '🐀', hp: 5, strength: 2, xp: 5 },
-            { name: 'Slime', emoji: '🟢', hp: 7, strength: 3, xp: 7 },
+            { name: 'Slime', emoji: '🟢', hp: 6, strength: 3, xp: 7 },
+            { name: 'Fairy',emoji: '🧚🏾', hp: 7, strength: 4, xp: 15},
             { name: 'Giant Bug', emoji: '🪲', hp: 8, strength: 4, xp: 8 },
             { name: 'Goblin', emoji: '👺', hp: 10, strength: 5, xp: 10 },
             { name: 'Skeleton', emoji: '💀', hp: 12, strength: 6, xp: 12 },
-            { name: 'Ghost', emoji: '👻', hp: 15, strength: 7, xp: 15 }
-        ];
+            { name: 'Ghost', emoji: '👻', hp: 15, strength: 7, xp: 15 },
+            { name: 'Zombie',emoji: '🧟', hp: 12, strength: 10, xp: 12},
+            { name: 'Werewolf',emoji: '🐺', hp: 17, strength: 12, xp: 20},
+            { name: 'Vampire',emoji: '🧛', hp: 20, strength: 15, xp: 23},
+            { name: 'Orc',emoji: '👹', hp: 25, strength: 20, xp: 25},
+            { name: 'Troll',emoji: '🧌', hp: 35, strength: 22, xp: 30},
+            { name: 'Dragon', emoji: '🐉', hp: 40, strength: 10, xp: 35 }
+            ];
 
         const itemTypes = [
             { name: 'Long Sword', emoji: '🗡️', strength: 10 },
@@ -188,11 +194,12 @@
             { name: 'Strength Potion', emoji: '💪', strength: 2, duration: 5, consumable: true },
             { name: 'Dexterity Potion', emoji: '🏃', dexterity: 2, duration: 5, consumable: true },
             { name: 'Luck Potion', emoji: '🍀', luck: 2, duration: 5, consumable: true },
-            { name: 'Coins', emoji: '🪙', value: 0 }
+            { name: 'Coins', emoji: '💰', value: 0 }
         ];
 
         const skillTypes = [
             { name: 'Fireball', emoji: '🔥', manaCost: 3, damage: 15 },
+            { name: 'Lightning Bolt', emoji: '⚡', manaCost: 4, damage: 17 },
             { name: 'Heal', emoji: '💚', manaCost: 2, healing: 10 },
             { name: 'Shield', emoji: '🛡️', manaCost: 2, defense: 5, duration: 3 }
         ];
@@ -215,14 +222,13 @@ let ctx;
 
 function resizeCanvas() {
     if (canvas) {
-       // if on computer...
-        // canvas.width = window.innerWidth;
-       // canvas.height = window.innerHeight;
-
+        // if on pc
+        //canvas.width = window.innerWidth;
+        //canvas.height = window.innerHeight;
+        
         // if on mobile
         canvas.width = document.documentElement.clientWidth;
         canvas.height = document.documentElement.clientHeight;
-
         
         // Adjust TILE_SIZE based on screen size
         const minDimension = Math.min(canvas.width, canvas.height);
